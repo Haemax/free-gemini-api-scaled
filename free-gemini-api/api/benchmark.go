@@ -37,19 +37,19 @@ type ComprehensiveBenchmarkResult struct {
 func RunBenchmark(cookiesFile string) {
 	client, err := gemini.NewClient(cookiesFile)
 	if err != nil {
-		log.Fatalf("❌ Failed to initialize Gemini client for benchmark: %v", err)
+		log.Fatalf("Failed to initialize Gemini client for benchmark: %v", err)
 	}
 
 	if err := client.InitSession(); err != nil {
-		log.Printf("⚠️ Session init warning: %v", err)
+		log.Printf("Session init warning: %v", err)
 	}
 
-	log.Println("🔍 Probing account endpoint for active models...")
+	log.Println("Probing account endpoint for active models...")
 	discovered, err := gemini.DiscoverAccountModels(client)
 	if err != nil {
-		log.Printf("⚠️ Discovery probe returned error: %v", err)
+		log.Printf("Discovery probe returned error: %v", err)
 	} else {
-		log.Printf("✨ Discovered %d model configurations from endpoint probe", len(discovered))
+		log.Printf("Discovered %d model configurations from endpoint probe", len(discovered))
 	}
 
 	allModels := gemini.GetModelRegistry().GetAll()
@@ -91,7 +91,7 @@ func RunBenchmark(cookiesFile string) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	fmt.Printf("🚀 Starting Multi-Workload Benchmark across %d models using [%s]...\n\n", len(allModels), cookiesFile)
+	fmt.Printf("Starting Multi-Workload Benchmark across %d models using [%s]...\n\n", len(allModels), cookiesFile)
 
 	for _, modelCfg := range allModels {
 		for _, wl := range workloads {
@@ -146,15 +146,15 @@ func RunBenchmark(cookiesFile string) {
 	wg.Wait()
 
 	fmt.Println("\n=========================================================================================================")
-	fmt.Println("                               📊 MULTI-WORKLOAD BENCHMARK SUMMARY                                      ")
+	fmt.Println("                               MULTI-WORKLOAD BENCHMARK SUMMARY                                      ")
 	fmt.Println("=========================================================================================================")
 	fmt.Printf("%-32s | %-18s | %-12s | %-12s | %-10s | %-8s\n", "MODEL ID", "WORKLOAD", "TTFT", "TOTAL TIME", "TPS", "STATUS")
 	fmt.Println("---------------------------------------------------------------------------------------------------------")
 
 	for _, r := range results {
-		status := "✅ OK"
+		status := "OK"
 		if !r.Success {
-			status = "❌ FAIL"
+			status = "FAIL"
 		}
 		fmt.Printf("%-32s | %-18s | %-12v | %-12v | %-10.2f | %-8s\n",
 			r.Model, r.Workload, r.TimeToFirstToken.Round(time.Millisecond), r.TotalTime.Round(time.Millisecond), r.TokensPerSec, status)
@@ -162,5 +162,5 @@ func RunBenchmark(cookiesFile string) {
 			fmt.Printf("   └── Error: %v\n", r.Error)
 		}
 	}
-	fmt.Println("=========================================================================================================\n")
+	fmt.Println("=========================================================================================================")
 }

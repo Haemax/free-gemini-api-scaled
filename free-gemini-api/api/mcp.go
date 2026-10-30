@@ -83,7 +83,7 @@ func getMCPBackendURL() string {
 func RunMCPServer() {
 	log.SetOutput(os.Stderr)
 	backendURL := getMCPBackendURL()
-	log.Printf("🔌 %s v%s starting over stdio...", mcpServerName, mcpServerVersion)
+	log.Printf("%s v%s starting over stdio...", mcpServerName, mcpServerVersion)
 	log.Printf("🔗 Backend API: %s", backendURL)
 
 	go checkMCPBackendHealth(backendURL)
@@ -99,7 +99,7 @@ func RunMCPServer() {
 
 		var req JSONRPCRequest
 		if err := json.Unmarshal(line, &req); err != nil {
-			log.Printf("⚠️ Failed to parse JSON-RPC request: %v", err)
+			log.Printf("Failed to parse JSON-RPC request: %v", err)
 			sendMCPError(nil, -32700, "Parse error: invalid JSON", nil)
 			continue
 		}
@@ -108,7 +108,7 @@ func RunMCPServer() {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("❌ Scanner error: %v", err)
+		log.Printf("Scanner error: %v", err)
 	}
 }
 
@@ -116,11 +116,11 @@ func checkMCPBackendHealth(backendURL string) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(backendURL + "/health")
 	if err != nil {
-		log.Printf("⚠️ Backend API health check failed: %v", err)
+		log.Printf("Backend API health check failed: %v", err)
 		return
 	}
 	defer resp.Body.Close()
-	log.Printf("✅ Backend API is reachable (status: %d)", resp.StatusCode)
+	log.Printf("Backend API is reachable (status: %d)", resp.StatusCode)
 }
 
 func handleMCPRequest(req JSONRPCRequest, backendURL string) {
@@ -140,7 +140,7 @@ func handleMCPRequest(req JSONRPCRequest, backendURL string) {
 		sendMCPResult(req.ID, result)
 
 	case "notifications/initialized":
-		log.Println("✅ Client initialized successfully")
+		log.Println("Client initialized successfully")
 
 	case "ping":
 		sendMCPResult(req.ID, map[string]interface{}{})
@@ -163,7 +163,7 @@ func handleMCPRequest(req JSONRPCRequest, backendURL string) {
 
 		if args.Prompt == "" && params.Name != "reset_session" && params.Name != "check_health" {
 			sendMCPResult(req.ID, &CallToolResult{
-				Content: []TextContent{{Type: "text", Text: "❌ Error: 'prompt' is required but was empty."}},
+				Content: []TextContent{{Type: "text", Text: "Error: 'prompt' is required but was empty."}},
 				IsError: true,
 			})
 			return
@@ -363,9 +363,9 @@ func handleMCPMediaGeneration(toolName string, args PromptArg, backendURL string
 			}
 		}
 	} else if toolName == "generate_video" && len(mresp.Videos) > 0 {
-		msg = fmt.Sprintf("🎬 Video generated successfully!\nURL: %s", mresp.Videos[0])
+		msg = fmt.Sprintf("Video generated successfully!\nURL: %s", mresp.Videos[0])
 	} else {
-		msg = fmt.Sprintf("⚠️ Request processed but no media URL returned.\nGemini replied: %s", mresp.Text)
+		msg = fmt.Sprintf("Request processed but no media URL returned.\nGemini replied: %s", mresp.Text)
 	}
 
 	return &CallToolResult{
@@ -405,12 +405,12 @@ func handleMCPMusicGeneration(args PromptArg, backendURL string) (*CallToolResul
 	var msg string
 	if len(mresp.Music) > 0 {
 		track := mresp.Music[0]
-		msg = fmt.Sprintf("🎵 Music generated successfully!\nTitle: %s\nPath: %s", track.Title, track.LocalPath)
+		msg = fmt.Sprintf("Music generated successfully!\nTitle: %s\nPath: %s", track.Title, track.LocalPath)
 		if track.DownloadURL != "" {
 			msg += fmt.Sprintf("\nURL: %s", track.DownloadURL)
 		}
 	} else {
-		msg = fmt.Sprintf("⚠️ Music request processed but no track returned.\nGemini replied: %s", mresp.Text)
+		msg = fmt.Sprintf("Music request processed but no track returned.\nGemini replied: %s", mresp.Text)
 	}
 
 	return &CallToolResult{
@@ -474,7 +474,7 @@ func handleMCPChat(args PromptArg, backendURL string) (*CallToolResult, error) {
 		}
 	}
 	if len(mresp.Videos) > 0 {
-		msg += "\n\n🎬 Generated Videos:"
+		msg += "\n\nGenerated Videos:"
 		for _, vid := range mresp.Videos {
 			msg += fmt.Sprintf("\n  %s", vid)
 		}
@@ -505,7 +505,7 @@ func handleMCPResetSession(backendURL string) (*CallToolResult, error) {
 
 	return &CallToolResult{
 		Content: []TextContent{
-			{Type: "text", Text: "🔄 Session successfully reset! The next messages will start a fresh conversation."},
+			{Type: "text", Text: "Session successfully reset! The next messages will start a fresh conversation."},
 		},
 	}, nil
 }
@@ -518,13 +518,13 @@ func handleMCPHealthCheck(backendURL string) (*CallToolResult, error) {
 
 	if err != nil {
 		return &CallToolResult{
-			Content: []TextContent{{Type: "text", Text: fmt.Sprintf("❌ Backend API unreachable: %v", err)}},
+			Content: []TextContent{{Type: "text", Text: fmt.Sprintf("Backend API unreachable: %v", err)}},
 			IsError: true,
 		}, nil
 	}
 	defer resp.Body.Close()
 
-	msg := fmt.Sprintf("✅ Backend API is healthy\n   URL: %s\n   Status: %d\n   Latency: %dms",
+	msg := fmt.Sprintf("Backend API is healthy\n   URL: %s\n   Status: %d\n   Latency: %dms",
 		backendURL, resp.StatusCode, elapsed.Milliseconds())
 
 	return &CallToolResult{
@@ -538,7 +538,7 @@ func executeMCPWithRetry(doRequest func() (*http.Response, error)) ([]byte, erro
 	for attempt := 0; attempt < mcpMaxRetries; attempt++ {
 		if attempt > 0 {
 			wait := time.Duration(math.Pow(2, float64(attempt))) * mcpBaseRetryWait
-			log.Printf("🔄 Retry %d/%d after %v...", attempt+1, mcpMaxRetries, wait)
+			log.Printf("Retry %d/%d after %v...", attempt+1, mcpMaxRetries, wait)
 			time.Sleep(wait)
 		}
 
@@ -562,7 +562,7 @@ func executeMCPWithRetry(doRequest func() (*http.Response, error)) ([]byte, erro
 }
 
 func formatMCPToolError(err error) string {
-	return fmt.Sprintf("❌ Tool execution failed: %v", err)
+	return fmt.Sprintf("Tool execution failed: %v", err)
 }
 
 func postMCPMultipart(targetURL, prompt, userID string, newChat bool, filePath string) (*http.Response, error) {
@@ -626,7 +626,7 @@ func sendMCPError(id interface{}, code int, message string, data interface{}) {
 func sendMCP(val interface{}) {
 	data, err := json.Marshal(val)
 	if err != nil {
-		log.Printf("❌ Failed to marshal JSON-RPC message: %v", err)
+		log.Printf("Failed to marshal JSON-RPC message: %v", err)
 		return
 	}
 	os.Stdout.Write(data)

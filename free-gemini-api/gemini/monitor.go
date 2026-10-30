@@ -69,7 +69,7 @@ func BroadcastCookieRefresh() {
 	lastSyncMu.Unlock()
 
 	if len(activeClients) == 0 {
-		log.Println("ℹ️ No Chrome Extension workers currently connected to receive trigger_sync")
+		log.Println("No Chrome Extension workers currently connected to receive trigger_sync")
 		return
 	}
 
@@ -81,7 +81,7 @@ func BroadcastCookieRefresh() {
 		conn := activeClients[i]
 		err := conn.WriteJSON(payload)
 		if err != nil {
-			log.Printf("⚠️ Failed to write to extension client: %v. Removing client.", err)
+			log.Printf("Failed to write to extension client: %v. Removing client.", err)
 			conn.Close()
 			activeClients = append(activeClients[:i], activeClients[i+1:]...)
 		}
@@ -165,13 +165,13 @@ func InspectAccountCookieHealth() CookieHealthInfo {
 // StartCookieWatchdog launches the passive background health monitor (on-demand sync mode)
 func StartCookieWatchdog() {
 	go func() {
-		log.Println("🛡️ Passive Cookie Health Monitor started (logs status every 30m, on-demand sync only)")
+		log.Println("Passive Cookie Health Monitor started (logs status every 30m, on-demand sync only)")
 		for {
 			time.Sleep(30 * time.Minute)
 			health := InspectAccountCookieHealth()
-			log.Printf("📊 Passive Health Check: status=%s, remaining_ttl=%s, monitored_accounts=%d", health.Status, health.MinTTLFormatted, health.MonitoredAccounts)
+			log.Printf("Passive Health Check: status=%s, remaining_ttl=%s, monitored_accounts=%d", health.Status, health.MinTTLFormatted, health.MonitoredAccounts)
 			if health.Status == "expired" {
-				log.Printf("🚨 Health Monitor: Cookie expired detected (%s). Requesting on-demand refresh...", health.MinTTLFormatted)
+				log.Printf("Health Monitor: Cookie expired detected (%s). Requesting on-demand refresh...", health.MinTTLFormatted)
 				BroadcastCookieRefresh()
 			}
 
@@ -370,7 +370,7 @@ func ProcessAndSaveCookies(cookies []CookieObject, profileID *int) (string, stri
 	accountFilePath := filepath.Join("cookies", fmt.Sprintf("account_%s.json", accountID))
 
 	if !hasAuthCookies(cookies) {
-		log.Printf("⚠️ Ignoring %d cookies for [%s]: no login cookie (logged-out Chrome profile?)", len(cookies), accountID)
+		log.Printf("Ignoring %d cookies for [%s]: no login cookie (logged-out Chrome profile?)", len(cookies), accountID)
 		return "", accountID, fmt.Errorf("%w (account %s)", ErrNoLoginCookie, accountID)
 	}
 	if isStaleSubset(accountFilePath, cookies) {
@@ -386,7 +386,7 @@ func ProcessAndSaveCookies(cookies []CookieObject, profileID *int) (string, stri
 		return accountFilePath, accountID, nil
 	}
 
-	log.Printf("🍪 Received %d cookies for Account [%s]", len(cookies), accountID)
+	log.Printf("Received %d cookies for Account [%s]", len(cookies), accountID)
 
 	lastSyncMu.Lock()
 	lastSyncTimestamp = time.Now()
@@ -402,7 +402,7 @@ func ProcessAndSaveCookies(cookies []CookieObject, profileID *int) (string, stri
 	if err := os.WriteFile(accountFilePath, data, 0644); err != nil {
 		return "", "", fmt.Errorf("failed to save %s: %w", accountFilePath, err)
 	}
-	log.Printf("💾 Stored account profile: %s", accountFilePath)
+	log.Printf("Stored account profile: %s", accountFilePath)
 
 	// Refresh CachedImageCookies
 	var parts []string
@@ -423,7 +423,7 @@ func StartCookieWebSocketServer(port int) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := wsUpgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("❌ WS Upgrade failed: %v", err)
+			log.Printf("WS Upgrade failed: %v", err)
 			return
 		}
 
@@ -432,7 +432,7 @@ func StartCookieWebSocketServer(port int) {
 		count := len(activeClients)
 		activeClientsMu.Unlock()
 
-		log.Printf("🔌 Chrome Extension connected to cookie bridge (Active Workers: %d)", count)
+		log.Printf("Chrome Extension connected to cookie bridge (Active Workers: %d)", count)
 
 		defer func() {
 			conn.Close()
@@ -445,7 +445,7 @@ func StartCookieWebSocketServer(port int) {
 			}
 			remCount := len(activeClients)
 			activeClientsMu.Unlock()
-			log.Printf("🔌 Chrome Extension disconnected (Active Workers: %d)", remCount)
+			log.Printf("Chrome Extension disconnected (Active Workers: %d)", remCount)
 		}()
 
 		for {
@@ -456,7 +456,7 @@ func StartCookieWebSocketServer(port int) {
 
 			var msg ExtensionMessage
 			if err := json.Unmarshal(msgBytes, &msg); err != nil {
-				log.Printf("❌ Failed to decode extension message: %v", err)
+				log.Printf("Failed to decode extension message: %v", err)
 				continue
 			}
 
@@ -468,7 +468,7 @@ func StartCookieWebSocketServer(port int) {
 			if msg.Type == "cookies_payload" && len(msg.Cookies) > 0 {
 				accID, _, err := ProcessAndSaveCookies(msg.Cookies, nil)
 				if err != nil {
-					log.Printf("❌ Failed to process cookies: %v", err)
+					log.Printf("Failed to process cookies: %v", err)
 				} else if accID != "" {
 					if msg.ForcePro || strings.EqualFold(msg.Tier, "subscription") {
 						SetForcedPro(accID)
@@ -481,14 +481,14 @@ func StartCookieWebSocketServer(port int) {
 			if msg.Type == "deepseek_session_payload" {
 				err := SaveDeepSeekSession(msg.UserToken, msg.Cookies)
 				if err != nil {
-					log.Printf("❌ Failed to process DeepSeek session: %v", err)
+					log.Printf("Failed to process DeepSeek session: %v", err)
 				}
 			}
 		}
 	})
 
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
-	log.Printf("📡 Cookie WebSocket Server listening on %s", addr)
+	log.Printf("Cookie WebSocket Server listening on %s", addr)
 
 	server := &http.Server{
 		Addr:    addr,
@@ -496,7 +496,7 @@ func StartCookieWebSocketServer(port int) {
 	}
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("❌ Cookie WebSocket Server failed: %v", err)
+		log.Fatalf("Cookie WebSocket Server failed: %v", err)
 	}
 }
 
@@ -508,6 +508,6 @@ func SaveDeepSeekSession(token string, cookies []CookieObject) error {
 	}
 	bytes, _ := json.MarshalIndent(data, "", "  ")
 	path := filepath.Join("cookies", "deepseek_account.json")
-	log.Printf("💾 Stored DeepSeek account profile: %s", path)
+	log.Printf("Stored DeepSeek account profile: %s", path)
 	return os.WriteFile(path, bytes, 0644)
 }

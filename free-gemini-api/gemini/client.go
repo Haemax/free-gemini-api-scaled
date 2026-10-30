@@ -1,6 +1,8 @@
 package gemini
 
 import (
+	"context"
+
 	"bufio"
 	"crypto/sha256"
 	"crypto/tls"
@@ -247,14 +249,14 @@ func NewClient(cookiesFile string) (*GeminiClient, error) {
 
 func (c *GeminiClient) loadCookies() error {
 	if c.cookiesFile == "" || c.cookiesFile == "guest" {
-		log.Println("🌐 [GeminiClient] Running in Guest/Anonymous mode (no cookies required).")
+		log.Println("[GeminiClient] Running in Guest/Anonymous mode (no cookies required).")
 		c.AccountTier = "free"
 		return nil
 	}
 	data, err := os.ReadFile(c.cookiesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("ℹ️ [GeminiClient] Cookie file %s not found, falling back to Guest mode.", c.cookiesFile)
+			log.Printf("[GeminiClient] Cookie file %s not found, falling back to Guest mode.", c.cookiesFile)
 			c.AccountTier = "free"
 			return nil
 		}
@@ -385,7 +387,7 @@ func (c *GeminiClient) persistSession() {
 	if data, err := json.MarshalIndent(saved, "", "  "); err == nil {
 		_ = os.MkdirAll(filepath.Dir(cachePath), 0755)
 		_ = os.WriteFile(cachePath, data, 0644)
-		log.Printf("💾 Persisted fresh session tokens to %s (valid for 18h, Tier: %s)", cachePath, c.AccountTier)
+		log.Printf("[Session] Persisted fresh session tokens to %s (valid for 18h, Tier: %s)", cachePath, c.AccountTier)
 	}
 }
 
@@ -393,7 +395,7 @@ func (c *GeminiClient) InitSession() error {
 	if c.cookiesFile == "" || c.cookiesFile == "guest" {
 		c.AccountTier = "free"
 		c.IsInitialized = true
-		log.Println("🌐 [GeminiClient] Initialized in Guest / Anonymous Mode (no login required for Free tier models).")
+		log.Println("[GeminiClient] Initialized in Guest / Anonymous Mode (no login required for Free tier models).")
 		return nil
 	}
 
@@ -472,7 +474,7 @@ func (c *GeminiClient) InitSession() error {
 		if strings.Contains(bodyStr, "ServiceLogin") || strings.Contains(bodyStr, "login.google.com") {
 			if attempt == 1 && GetActiveWorkerCount() > 0 {
 				// Only worth waiting if an extension can actually push fresh cookies.
-				log.Println("⚠️ Session expired detected. Requesting Chrome Extension to proactively rotate cookies...")
+				log.Println("[Session] Session expired detected. Requesting Chrome Extension to proactively rotate cookies...")
 				BroadcastCookieRefresh()
 				time.Sleep(5 * time.Second)
 				_ = c.loadCookies()
@@ -500,18 +502,18 @@ func (c *GeminiClient) executeWithRetry(actionName string, runFunc func() error)
 		return nil
 	}
 
-	log.Printf("⚠️ [%s] Request failed: %v. Triggering automatic cookie sync and session refresh...", actionName, err)
+	log.Printf("[Client] [%s] Request failed: %v. Triggering automatic cookie sync and session refresh...", actionName, err)
 	
 	// Reset initialized status to force session re-initialization
 	c.IsInitialized = false
 	
 	// InitSession will broadcast cookie refresh, sleep 5s, reload cookies, and retry the app session init
 	if initErr := c.InitSession(); initErr != nil {
-		log.Printf("❌ [%s] Session recovery failed: %v", actionName, initErr)
+		log.Printf("[Client] [%s] Session recovery failed: %v", actionName, initErr)
 		return fmt.Errorf("%s failed and auto-heal session recovery failed: %w", actionName, initErr)
 	}
 
-	log.Printf("🔄 [%s] Session successfully auto-healed! Retrying request...", actionName)
+	log.Printf("[Client] [%s] Session successfully auto-healed! Retrying request...", actionName)
 	return runFunc()
 }
 
@@ -591,7 +593,7 @@ func (c *GeminiClient) executeStreamRequest(prompt string, modelName string, onC
 	if c.useQUIC {
 		rawBody, err = c.doStreamRequestQUIC(fullURL, data, modelCfg, onChunk)
 		if err != nil {
-			log.Printf("⚠️ HTTP/3 QUIC stream failed (%v). Falling back to HTTP/2 TLS...", err)
+			log.Printf("[QUIC] Stream failed (%v). Falling back to HTTP/2 TLS...", err)
 			c.useQUIC = false
 			rawBody, err = c.doStreamRequestHTTP2(fullURL, data, modelCfg, onChunk)
 		}
@@ -624,7 +626,9 @@ func (c *GeminiClient) executeStreamRequest(prompt string, modelName string, onC
 }
 
 func (c *GeminiClient) doStreamRequestQUIC(fullURL string, data url.Values, modelCfg *ModelConfig, onChunk func(text string)) (string, error) {
-	req, err := stdhttp.NewRequest("POST", fullURL, strings.NewReader(data.Encode()))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	req, err := stdhttp.NewRequestWithContext(ctx, "POST", fullURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", err
 	}
@@ -639,7 +643,7 @@ func (c *GeminiClient) doStreamRequestQUIC(fullURL string, data url.Values, mode
 	req.Header.Set("Referer", fmt.Sprintf("https://gemini.google.com%s/app", c.getAccountPrefix()))
 	req.Header.Set("X-Same-Domain", "1")
 	jspbVal := modelCfg.BuildHeaderValue()
-	log.Printf("📡 [Request] model=%s jspb=%s", modelCfg.ID, jspbVal)
+	log.Printf("[Request] model=%s jspb=%s", modelCfg.ID, jspbVal)
 	req.Header.Set("x-goog-ext-525001261-jspb", jspbVal)
 	req.Header.Set("x-goog-ext-525005358-jspb", `["DIRECT-API-SESSION",1]`)
 	req.Header.Set("x-goog-ext-73010989-jspb", `[0]`)
@@ -661,7 +665,9 @@ func (c *GeminiClient) doStreamRequestQUIC(fullURL string, data url.Values, mode
 }
 
 func (c *GeminiClient) doStreamRequestHTTP2(fullURL string, data url.Values, modelCfg *ModelConfig, onChunk func(text string)) (string, error) {
-	req, err := http.NewRequest("POST", fullURL, strings.NewReader(data.Encode()))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "POST", fullURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", err
 	}
@@ -679,7 +685,7 @@ func (c *GeminiClient) doStreamRequestHTTP2(fullURL string, data url.Values, mod
 	req.Header.Set("Referer", fmt.Sprintf("https://gemini.google.com%s/app", c.getAccountPrefix()))
 	req.Header.Set("X-Same-Domain", "1")
 	jspbVal2 := modelCfg.BuildHeaderValue()
-	log.Printf("📡 [HTTP2-Request] model=%s jspb=%s", modelCfg.ID, jspbVal2)
+	log.Printf("[HTTP2-Request] model=%s jspb=%s", modelCfg.ID, jspbVal2)
 	req.Header.Set("x-goog-ext-525001261-jspb", jspbVal2)
 	req.Header.Set("x-goog-ext-525005358-jspb", `["DIRECT-API-SESSION",1]`)
 	req.Header.Set("x-goog-ext-73010989-jspb", `[0]`)
@@ -697,8 +703,41 @@ func (c *GeminiClient) doStreamRequestHTTP2(fullURL string, data url.Values, mod
 	return c.readAndProcessStream(resp.Body, onChunk)
 }
 
+
+type timeoutReader struct {
+	reader      io.Reader
+	idleTimeout time.Duration
+}
+
+func (tr *timeoutReader) Read(p []byte) (n int, err error) {
+	type readResult struct {
+		n   int
+		err error
+	}
+	ch := make(chan readResult, 1)
+
+	go func() {
+		n, err := tr.reader.Read(p)
+		ch <- readResult{n: n, err: err}
+	}()
+
+	timer := time.NewTimer(tr.idleTimeout)
+	defer timer.Stop()
+
+	select {
+	case res := <-ch:
+		return res.n, res.err
+	case <-timer.C:
+		return 0, fmt.Errorf("stream idle timeout: no data received for %v", tr.idleTimeout)
+	}
+}
+
 func (c *GeminiClient) readAndProcessStream(body io.Reader, onChunk func(text string)) (string, error) {
-	scanner := bufio.NewScanner(body)
+	timedBody := &timeoutReader{
+		reader:      body,
+		idleTimeout: 30 * time.Second,
+	}
+	scanner := bufio.NewScanner(timedBody)
 	scanner.Buffer(make([]byte, 64*1024), 10*1024*1024)
 
 	var rawBodyBuilder strings.Builder
@@ -892,7 +931,7 @@ func (c *GeminiClient) AskWithImagesModel(prompt string, images []ImageInput, mo
 
 // pollVideoURL polls hNvQHb RPC to find the video download URL
 func (c *GeminiClient) pollVideoURL(response *GeminiResponse) {
-	log.Println("🎬 Polling hNvQHb for video download URL...")
+	log.Println("Polling hNvQHb for video download URL...")
 	// videoURLRe now at package level
 
 	delays := []time.Duration{2500 * time.Millisecond, 3000 * time.Millisecond, 4000 * time.Millisecond}
@@ -902,12 +941,12 @@ func (c *GeminiClient) pollVideoURL(response *GeminiResponse) {
 			sleepDur = delays[i]
 		}
 		time.Sleep(sleepDur)
-		log.Printf("🎬 Video Poll %d/60 (waited %v)...", i+1, sleepDur)
+		log.Printf("Video Poll %d/60 (waited %v)...", i+1, sleepDur)
 
 		hPayload := fmt.Sprintf(`["%s",10,null,1,[1],[4],null,1]`, response.ConversationID)
 		hBody, err := c.CallRPC("hNvQHb", hPayload)
 		if err != nil {
-			log.Printf("⚠️ hNvQHb error: %v", err)
+			log.Printf("hNvQHb error: %v", err)
 			continue
 		}
 
@@ -922,7 +961,7 @@ func (c *GeminiClient) pollVideoURL(response *GeminiResponse) {
 			strings.Contains(hBody, "I can't create") || strings.Contains(hBody, "find videos from the web") ||
 			strings.Contains(hBody, "और ज़्यादा वीडियो") || strings.Contains(hBody, "नहीं जनरेट कर सकता") ||
 			strings.Contains(hBody, "ढूँढ सकता हूँ") || strings.Contains(hBody, "limit") {
-			log.Println("❌ Video generation refused (rate limit/quota exhausted)")
+			log.Println("Video generation refused (rate limit/quota exhausted)")
 			response.Text = "Video generation failed: daily limit/quota exhausted."
 			response.Videos = nil
 			break
@@ -934,12 +973,12 @@ func (c *GeminiClient) pollVideoURL(response *GeminiResponse) {
 		for _, m := range matches {
 			// Skip reference input videos uploaded by our server (which always contain "vid_")
 			if strings.Contains(m, "vid_") {
-				log.Printf("⏭️ Skipping matched reference video URL: %s", m[:min(len(m), 100)])
+				log.Printf("Skipping matched reference video URL: %s", m[:min(len(m), 100)])
 				continue
 			}
 			// Skip non-video assets like protobuf context files (ensure it ends with .mp4 or contains filename=video.mp4)
 			if !strings.Contains(m, ".mp4") && !strings.Contains(m, "filename=video") {
-				log.Printf("⏭️ Skipping matched non-mp4 asset URL: %s", m[:min(len(m), 100)])
+				log.Printf("Skipping matched non-mp4 asset URL: %s", m[:min(len(m), 100)])
 				continue
 			}
 			chosenURL = m
@@ -948,7 +987,7 @@ func (c *GeminiClient) pollVideoURL(response *GeminiResponse) {
 
 		if chosenURL != "" {
 			response.Videos = []string{chosenURL}
-			log.Println("✅ Video URL found!")
+			log.Println("Video URL found!")
 			break
 		}
 
@@ -961,7 +1000,7 @@ func (c *GeminiClient) pollVideoURL(response *GeminiResponse) {
 		if len(snippet) > 200 {
 			snippet = hBody[len(hBody)-200:]
 		}
-		log.Printf("🔍 Poll response (%d chars): ...%s", len(hBody), snippet)
+		log.Printf("Poll response (%d chars): ...%s", len(hBody), snippet)
 	}
 }
 
@@ -1000,10 +1039,8 @@ func (c *GeminiClient) AskWithToolModel(prompt string, tool string, modelName st
 
 	// Music fallback: if URL didn't come in first response, quick poll
 	if tool == "music_gen" && len(response.Music) == 0 && response.ConversationID != "" {
-		log.Println("🎵 Music URL not in response, polling...")
+		log.Println("Music URL not in response, polling...")
 		rawConv := strings.TrimPrefix(response.ConversationID, "c_")
-		re := regexp.MustCompile(`https?://contribution\.usercontent\.google\.com/download[^"\\` + "`" + `\s]+`)
-
 		for i := 0; i < 6; i++ {
 			time.Sleep(5 * time.Second)
 			body, err := c.pollConversation(rawConv)
@@ -1012,7 +1049,7 @@ func (c *GeminiClient) AskWithToolModel(prompt string, tool string, modelName st
 			}
 			body = strings.ReplaceAll(body, `\u0026`, "&")
 			body = strings.ReplaceAll(body, `\u003d`, "=")
-			if m := re.FindString(body); m != "" {
+			if m := vidRe.FindString(body); m != "" {
 				track := MusicTrack{DownloadURL: m}
 				if idx := strings.Index(m, "filename="); idx != -1 {
 					fname := m[idx+9:]
@@ -1024,7 +1061,7 @@ func (c *GeminiClient) AskWithToolModel(prompt string, tool string, modelName st
 					track.Title = fname
 				}
 				response.Music = append(response.Music, track)
-				log.Println("✅ Music URL found via poll")
+				log.Println("Music URL found via poll")
 				break
 			}
 		}
@@ -1077,11 +1114,11 @@ func (c *GeminiClient) AskVideo(prompt string) (*GeminiResponse, error) {
 		c.updateConvState(modelCfg.ID, response.ConversationID, response.ResponseID, response.ChoiceID)
 	}
 
-	log.Printf("🎬 Video response: conv=%s, text=%s", response.ConversationID, response.Text[:min(len(response.Text), 100)])
+	log.Printf("Video response: conv=%s, text=%s", response.ConversationID, response.Text[:min(len(response.Text), 100)])
 
 	// If no video_gen_chip in response, video wasn't triggered
 	if !strings.Contains(response.Text, "video_gen_chip") && !strings.Contains(response.Text, "generating your video") {
-		log.Println("⚠️ Video generation not triggered — Gemini didn't recognize video intent")
+		log.Println("Video generation not triggered — Gemini didn't recognize video intent")
 		response.Elapsed = time.Since(start).Seconds()
 		return response, nil
 	}
@@ -1204,7 +1241,7 @@ func (c *GeminiClient) sendRequest(prompt string, tool string, imageRef []interf
 	if c.useQUIC {
 		rawBody, err = c.sendRequestQUIC(fullURL, data, modelCfg)
 		if err != nil {
-			log.Printf("⚠️ HTTP/3 QUIC request failed (%v). Falling back to HTTP/2 TLS...", err)
+			log.Printf("HTTP/3 QUIC request failed (%v). Falling back to HTTP/2 TLS...", err)
 			c.useQUIC = false
 			rawBody, err = c.sendRequestHTTP2(fullURL, data, modelCfg)
 		}
@@ -1248,7 +1285,7 @@ func (c *GeminiClient) sendRequest(prompt string, tool string, imageRef []interf
 					track.Title = fname
 				}
 				response.Music = append(response.Music, track)
-				log.Printf("🎵 Found music URL via regex: %s", m[:min(len(m), 100)])
+				log.Printf("Found music URL via regex: %s", m[:min(len(m), 100)])
 			}
 		}
 	}
@@ -1272,7 +1309,7 @@ func (c *GeminiClient) sendRequestQUIC(fullURL string, data url.Values, modelCfg
 	req.Header.Set("Referer", fmt.Sprintf("https://gemini.google.com%s/app", c.getAccountPrefix()))
 	req.Header.Set("X-Same-Domain", "1")
 	jspbVal := modelCfg.BuildHeaderValue()
-	log.Printf("📡 [sendRequestQUIC] model=%s jspb=%s", modelCfg.ID, jspbVal)
+	log.Printf("[sendRequestQUIC] model=%s jspb=%s", modelCfg.ID, jspbVal)
 	req.Header.Set("x-goog-ext-525001261-jspb", jspbVal)
 	req.Header.Set("x-goog-ext-525005358-jspb", `["DIRECT-API-SESSION",1]`)
 	req.Header.Set("x-goog-ext-73010989-jspb", `[0]`)
@@ -1316,7 +1353,7 @@ func (c *GeminiClient) sendRequestHTTP2(fullURL string, data url.Values, modelCf
 	req.Header.Set("Referer", fmt.Sprintf("https://gemini.google.com%s/app", c.getAccountPrefix()))
 	req.Header.Set("X-Same-Domain", "1")
 	jspbVal := modelCfg.BuildHeaderValue()
-	log.Printf("📡 [sendRequestHTTP2] model=%s jspb=%s", modelCfg.ID, jspbVal)
+	log.Printf("[sendRequestHTTP2] model=%s jspb=%s", modelCfg.ID, jspbVal)
 	req.Header.Set("x-goog-ext-525001261-jspb", jspbVal)
 	req.Header.Set("x-goog-ext-525005358-jspb", `["DIRECT-API-SESSION",1]`)
 	req.Header.Set("x-goog-ext-73010989-jspb", `[0]`)
@@ -1329,7 +1366,7 @@ func (c *GeminiClient) sendRequestHTTP2(fullURL string, data url.Values, modelCf
 
 	if resp.StatusCode != 200 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		log.Printf("❌ [sendRequestHTTP2] Failed with status %d: %s (Headers: %+v)", resp.StatusCode, string(bodyBytes[:min(len(bodyBytes), 300)]), resp.Header)
+		log.Printf("[sendRequestHTTP2] Failed with status %d: %s (Headers: %+v)", resp.StatusCode, string(bodyBytes[:min(len(bodyBytes), 300)]), resp.Header)
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
@@ -1530,7 +1567,7 @@ func (c *GeminiClient) DownloadFile(urlStr, savePath string) error {
 			if location == "" {
 				return fmt.Errorf("redirect with no Location header (status %d)", resp.StatusCode)
 			}
-			log.Printf("🔀 Download redirect %d: %s → %s", resp.StatusCode, currentURL[:min(len(currentURL), 60)], location[:min(len(location), 80)])
+			log.Printf("Download redirect %d: %s → %s", resp.StatusCode, currentURL[:min(len(currentURL), 60)], location[:min(len(location), 80)])
 			currentURL = location
 			continue
 		}
@@ -1583,6 +1620,6 @@ func (c *GeminiClient) ReloadSession() error {
 	// Mark as uninitialized and invalidate session cache so the next request gets fresh tokens
 	c.IsInitialized = false
 	_ = os.Remove(c.getSessionCachePath())
-	log.Println("♻️  Cookies reloaded in memory. Session marked for lazy re-initialization.")
+	log.Println("Cookies reloaded in memory. Session marked for lazy re-initialization.")
 	return nil
 }

@@ -251,7 +251,7 @@ func DiscoverAccountModels(client *GeminiClient) ([]ModelConfig, error) {
 
 	// Update client account tier
 	client.AccountTier = DetectAccountTier(bodyStr, client.cookiesFile)
-	log.Printf("🔍 [Discovery] Account %s tier evaluated as: %s", filepath.Base(client.cookiesFile), client.AccountTier)
+	log.Printf("[Discovery] Account %s tier evaluated as: %s", filepath.Base(client.cookiesFile), client.AccountTier)
 
 	// Discover models
 	models := DiscoverModelsFromHTML(bodyStr)
@@ -259,7 +259,7 @@ func DiscoverAccountModels(client *GeminiClient) ([]ModelConfig, error) {
 
 	for _, m := range models {
 		reg.Register(m)
-		log.Printf("✨ [Discovery] Discovered and registered model: %s (%s, MinTier: %s)", m.ID, m.DisplayName, m.MinTier)
+		log.Printf("[Discovery] Discovered and registered model: %s (%s, MinTier: %s)", m.ID, m.DisplayName, m.MinTier)
 	}
 
 	return models, nil

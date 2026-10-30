@@ -24,7 +24,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	if err := godotenv.Load(".env", "config.env"); err != nil {
-		log.Println("⚠️  No .env file found, using system environment variables")
+		log.Println("No .env file found, using system environment variables")
 	}
 
 	// Check if invoked with --help or help flag
@@ -41,18 +41,18 @@ func main() {
 
 	// Initialize SQLite Database
 	if _, err := db.InitDB(); err != nil {
-		log.Printf("⚠️ SQLite initialization warning: %v", err)
+		log.Printf("SQLite initialization warning: %v", err)
 	}
 
 	// Check if invoked as CLI stats inspector
 	if len(os.Args) > 1 && (os.Args[1] == "stats" || os.Args[1] == "--stats") {
 		stats, err := db.GetSystemStats()
 		if err != nil {
-			log.Fatalf("❌ Failed to read stats: %v", err)
+			log.Fatalf("Failed to read stats: %v", err)
 		}
 		accounts, _ := db.GetAccounts()
 		fmt.Println("\n╔══════════════════════════════════════════════════════════╗")
-		fmt.Println("║       📊 FREE GEMINI API - SYSTEM & DB ANALYTICS         ║")
+		fmt.Println("║       FREE GEMINI API - SYSTEM & DB ANALYTICS         ║")
 		fmt.Println("╠══════════════════════════════════════════════════════════╣")
 		fmt.Printf("║  Database File:    %-37s ║\n", fmt.Sprintf("%v", stats["database_file"]))
 		fmt.Printf("║  Database Engine:  %-37s ║\n", fmt.Sprintf("%v", stats["engine"]))
@@ -86,22 +86,22 @@ func main() {
 		if strings.HasSuffix(targetFile, ".json") {
 			outJSON, _, err := api.ExportAnalyticsToJSON(targetFile)
 			if err != nil {
-				log.Fatalf("❌ JSON Export failed: %v", err)
+				log.Fatalf("JSON Export failed: %v", err)
 			}
-			log.Printf("✅ JSON Analytics exported successfully: %s", outJSON)
+			log.Printf("JSON Analytics exported successfully: %s", outJSON)
 		} else if strings.HasSuffix(targetFile, ".xlsx") {
 			outXlsx, err := api.ExportAnalyticsToExcel(targetFile)
 			if err != nil {
-				log.Fatalf("❌ Excel Export failed: %v", err)
+				log.Fatalf("Excel Export failed: %v", err)
 			}
-			log.Printf("✅ Excel Analytics exported successfully: %s", outXlsx)
+			log.Printf("Excel Analytics exported successfully: %s", outXlsx)
 		} else {
 			outXlsx, err := api.ExportAnalyticsToExcel(targetFile)
 			if err != nil {
-				log.Fatalf("❌ Excel Export failed: %v", err)
+				log.Fatalf("Excel Export failed: %v", err)
 			}
 			outJSON, _, _ := api.ExportAnalyticsToJSON("")
-			log.Printf("✅ Dual Analytics exported successfully:\n   📊 Excel: %s\n   ⚡ JSON:  %s", outXlsx, outJSON)
+			log.Printf("Dual Analytics exported successfully:\n   Excel: %s\n   ⚡ JSON:  %s", outXlsx, outJSON)
 		}
 		return
 	}
@@ -128,7 +128,7 @@ func main() {
 	app.Use(func(c fiber.Ctx) error {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("⚠️ RECOVERED from panic: %v", r)
+				log.Printf("RECOVERED from panic: %v", r)
 				c.Status(500).JSON(fiber.Map{"error": "Internal Server Error - Recovered"})
 			}
 		}()
@@ -148,13 +148,13 @@ func main() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
-		log.Println("\n⚠️ Interrupted by user (SIGINT/SIGTERM)! Finalizing in-flight requests and shutting down cleanly...")
+		log.Println("\nInterrupted by user (SIGINT/SIGTERM)! Finalizing in-flight requests and shutting down cleanly...")
 		if err := app.ShutdownWithTimeout(5 * time.Second); err != nil {
-			log.Printf("⚠️ Fiber graceful shutdown error: %v", err)
+			log.Printf("Fiber graceful shutdown error: %v", err)
 		}
 	}()
 
-	log.Printf("🚀 Free Gemini API Server starting on port :%s (HTTP/3 QUIC enabled)...", port)
+	log.Printf("Free Gemini API Server starting on port :%s (HTTP/3 QUIC enabled)...", port)
 	if err := app.Listen(":" + port); err != nil {
 		log.Printf("Server stopped: %v", err)
 	}

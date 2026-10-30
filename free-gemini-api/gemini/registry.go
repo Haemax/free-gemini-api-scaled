@@ -481,7 +481,7 @@ func (r *ModelRegistry) LoadFromFile() {
 
 	var customModels []ModelConfig
 	if err := json.Unmarshal(data, &customModels); err != nil {
-		log.Printf("⚠️ [ModelRegistry] Failed to parse %s: %v", r.storagePath, err)
+		log.Printf("[ModelRegistry] Failed to parse %s: %v", r.storagePath, err)
 		return
 	}
 

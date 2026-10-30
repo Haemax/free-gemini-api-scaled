@@ -37,7 +37,7 @@ func StartPeriodicAnalyticsExport(interval time.Duration) {
 			exportAnalytics()
 		}
 	}()
-	log.Printf("📊 Periodic analytics export started (interval: %v)", interval)
+	log.Printf("Periodic analytics export started (interval: %v)", interval)
 }
 
 func exportAnalytics() {
@@ -51,12 +51,12 @@ func exportAnalytics() {
 	latestJSONPath := filepath.Join(outputDir, "gemini_analytics.json")
 
 	if _, err := ExportAnalyticsToExcel(latestExcelPath); err != nil {
-		log.Printf("⚠️ Periodic export Excel warning: %v", err)
+		log.Printf("Periodic export Excel warning: %v", err)
 	}
 	if _, _, err := ExportAnalyticsToJSON(latestJSONPath); err != nil {
-		log.Printf("⚠️ Periodic export JSON warning: %v", err)
+		log.Printf("Periodic export JSON warning: %v", err)
 	}
-	log.Printf("📊 Periodic analytics exported: %s & %s", latestExcelPath, latestJSONPath)
+	log.Printf("Periodic analytics exported: %s & %s", latestExcelPath, latestJSONPath)
 }
 
 // HandleExcelExport handles GET /export/excel
@@ -217,8 +217,8 @@ func ExportAnalyticsToExcel(outputPath string) (string, error) {
 	}
 	_ = renderStyledSheet(f, sheetMedia, mediaRows, mediaHeaders, "#581C87", "#9333EA")
 
-	// ─── Sheet 3: 📊 Executive Analytics ────────────────────────────────────
-	sheetAnalytics := "📊 Executive Analytics"
+	// ─── Sheet 3: Executive Analytics ────────────────────────────────────
+	sheetAnalytics := "Executive Analytics"
 	f.NewSheet(sheetAnalytics)
 	_ = renderAnalyticsSummarySheet(f, sheetAnalytics, len(messages), len(media), totalTokens, stats, mediaCounts, accounts)
 
